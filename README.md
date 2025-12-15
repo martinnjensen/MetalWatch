@@ -7,7 +7,7 @@ A cloud-based service that tracks heavy metal concerts in Copenhagen from [heavy
 - **Daily Automated Scraping**: Checks the concert calendar daily for new shows
 - **Smart Matching**: Filters concerts based on your favorite artists, venues, and keywords
 - **Pluggable Notifications**: Email notifications with easy extensibility for other channels (Slack, Discord, etc.)
-- **Cloud-Ready**: Designed for Azure Functions deployment in European regions
+- **Cloud-Ready**: Designed for cloud deployment in European regions
 - **Concert Tracking**: Maintains history to identify new concerts and detect cancellations
 
 ## Architecture
@@ -37,14 +37,14 @@ MetalWatch/
 │   │   │   └── HeavyMetalDkScraper.cs # Specific scraper implementation
 │   │   ├── Storage/
 │   │   │   ├── JsonDataStore.cs     # JSON file storage (local dev)
-│   │   │   └── BlobStorageDataStore.cs # Azure Blob storage (production)
+│   │   │   └── S3CompatibleDataStore.cs # S3-compatible storage (production)
 │   │   └── Notifications/
 │   │       └── EmailNotificationService.cs # Email implementation
 │   │
-│   ├── MetalWatch.Function/          # Azure Function host
-│   │   ├── DailyConcertCheck.cs     # Timer trigger function
-│   │   ├── host.json
-│   │   └── local.settings.json
+│   ├── MetalWatch.Worker/            # Background worker service
+│   │   ├── DailyConcertCheckWorker.cs # Scheduled worker
+│   │   ├── appsettings.json
+│   │   └── appsettings.Development.json
 │   │
 └── tests/
     └── MetalWatch.Tests/             # Unit and integration tests
@@ -60,26 +60,26 @@ MetalWatch/
 **2. Storage Abstraction**
 - `IDataStore` interface allows switching between storage backends
 - JSON files for local development
-- Azure Blob Storage for production
+- S3-compatible object storage for production (works with EU sovereign cloud providers)
 - Easy to add database support if needed
 
 **3. Clean Architecture**
 - Core layer contains business logic, independent of frameworks
 - Infrastructure layer contains external dependencies
-- Function layer is thin hosting layer
+- Worker layer is thin hosting layer
 
 ## Technology Stack
 
 - **Language**: C# (.NET 8.0)
 - **Web Scraping**: HtmlAgilityPack
 - **Email**: MailKit
-- **Cloud Platform**: Azure Functions (Consumption Plan)
-- **Storage**: Azure Blob Storage
-- **Deployment Region**: West Europe (Netherlands) or North Europe (Ireland)
+- **Deployment**: Containerized worker service with systemd timers or Kubernetes CronJob
+- **Storage**: S3-compatible object storage (e.g., MinIO, OpenStack Swift)
+- **Deployment Region**: EU sovereign cloud providers (e.g., OVHcloud, Hetzner, IONOS, or local EU infrastructure)
 
 ## Configuration
 
-The service is configured via `appsettings.json` or Azure Function application settings:
+The service is configured via `appsettings.json` or environment variables:
 
 ```json
 {
@@ -104,9 +104,12 @@ The service is configured via `appsettings.json` or Azure Function application s
       }
     },
     "Storage": {
-      "Type": "BlobStorage",
-      "BlobConnectionString": "***",
-      "ContainerName": "concert-data"
+      "Type": "S3Compatible",
+      "S3Endpoint": "https://s3.eu-central-1.example.com",
+      "S3AccessKey": "***",
+      "S3SecretKey": "***",
+      "S3BucketName": "concert-data",
+      "S3Region": "eu-central-1"
     }
   }
 }
@@ -136,17 +139,20 @@ Concerts with a score > 0 are included in notifications.
 ### Prerequisites
 
 - .NET 8.0 SDK
-- Azure Functions Core Tools (for local testing)
-- Azure Storage Emulator or Azurite (for local storage testing)
+- Docker (optional, for MinIO local testing)
 
 ### Local Development
 
 1. Clone the repository
-2. Copy `local.settings.json.example` to `local.settings.json` and configure
-3. Run Azure Functions locally:
+2. Copy `appsettings.Development.json.example` to `appsettings.Development.json` and configure
+3. (Optional) Start local MinIO for S3-compatible storage testing:
    ```bash
-   cd src/MetalWatch.Function
-   func start
+   docker run -p 9000:9000 -p 9001:9001 minio/minio server /data --console-address ":9001"
+   ```
+4. Run the worker service locally:
+   ```bash
+   cd src/MetalWatch.Worker
+   dotnet run
    ```
 
 ### Testing
@@ -158,33 +164,60 @@ dotnet test
 
 ## Deployment
 
-### Azure Functions (Recommended)
+### Option 1: Docker Container with systemd Timer (Recommended for EU Sovereignty)
 
-1. **Create Azure Resources**:
-   - Resource Group in West Europe
-   - Storage Account for function app and concert data
-   - Function App (Consumption Plan, .NET 8)
-
-2. **Configure Application Settings**:
-   - Add all configuration from `appsettings.json`
-   - Store sensitive values (email password, connection strings) in Azure Key Vault
-
-3. **Deploy**:
+1. **Build Docker Image**:
    ```bash
-   func azure functionapp publish <function-app-name>
+   docker build -t metalwatch:latest .
    ```
 
-4. **Schedule**: Timer trigger runs daily at 8:00 AM CET (CRON: `0 0 8 * * *`)
+2. **Deploy to EU Sovereign Cloud** (e.g., Hetzner, OVHcloud, IONOS):
+   - Create a VM in an EU region
+   - Install Docker
+   - Set up environment variables or mount `appsettings.json`
+   - Run container with systemd timer or cron for daily execution
 
-### Alternative: Hetzner Cloud (German Provider)
+3. **Schedule**: Use systemd timer or cron to run daily at 8:00 AM CET
 
-Deploy as a containerized application with systemd timer for scheduling.
+### Option 2: Kubernetes CronJob
 
-### Cost Estimation (Azure West Europe)
+1. **Create Kubernetes Deployment**:
+   ```yaml
+   apiVersion: batch/v1
+   kind: CronJob
+   metadata:
+     name: metalwatch-daily
+   spec:
+     schedule: "0 8 * * *"  # Daily at 8:00 AM
+     jobTemplate:
+       spec:
+         template:
+           spec:
+             containers:
+             - name: metalwatch
+               image: metalwatch:latest
+               envFrom:
+               - secretRef:
+                   name: metalwatch-config
+   ```
 
-- Azure Functions: ~€0-5/month
-- Blob Storage: ~€0.10/month
-- **Total**: ~€5/month
+2. **Deploy to EU Kubernetes cluster** (e.g., on OVHcloud Managed Kubernetes, Hetzner Cloud, or self-hosted)
+
+### Option 3: Standalone Service
+
+Deploy as a long-running .NET Worker Service with internal scheduling (uses `BackgroundService` with timer).
+
+### Cost Estimation (EU Sovereign Cloud)
+
+**Hetzner Cloud (German Provider)**:
+- CX11 VM (2 vCPU, 2GB RAM): ~€4/month
+- Object Storage (250 GB included): ~€5/month
+- **Total**: ~€9/month
+
+**OVHcloud (French Provider)**:
+- B2-7 VM (2 vCPU, 7GB RAM): ~€7/month
+- Object Storage (Pay-as-you-go): ~€0.01/GB
+- **Total**: ~€7-10/month
 
 ## Extending with New Notification Channels
 
@@ -215,9 +248,9 @@ To add a new notification channel:
 - [ ] Implement core scraping logic
 - [ ] Implement concert matching service
 - [ ] Implement email notification service
-- [ ] Create Azure Function with timer trigger
+- [ ] Create Worker Service with scheduled background job
 - [ ] Add unit tests
-- [ ] Deploy to Azure
+- [ ] Deploy to EU sovereign cloud
 - [ ] Add web dashboard for managing preferences
 - [ ] Add support for multiple regions beyond Copenhagen
 - [ ] Add support for Slack notifications
