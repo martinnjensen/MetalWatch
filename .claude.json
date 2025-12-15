@@ -1,0 +1,30 @@
+{
+  "installMethod": "unknown",
+  "autoUpdates": true,
+  "cachedStatsigGates": {
+    "tengu_log_1p_events": true,
+    "tengu_disable_bypass_permissions_mode": false,
+    "code_slack_app_install_banner": false,
+    "tengu_tool_pear": false,
+    "tengu_vscode_review_upsell": false,
+    "tengu_web_tasks": true
+  },
+  "userID": "4c2698a2b947414f2340c0ddf70e6c16de5530d2442e578224a25eaa3dcdd014",
+  "firstStartTime": "2025-12-09T13:14:38.535Z",
+  "sonnet45MigrationComplete": true,
+  "opus45MigrationComplete": true,
+  "oauthAccount": {
+    "accountUuid": "f4b25748-4d64-4d78-adb3-034c730df243",
+    "emailAddress": "martin.noerskov.jensen@gmail.com",
+    "organizationUuid": "b8094987-8d4b-4132-8c1d-e2bb9fa0bb21",
+    "hasExtraUsageEnabled": false,
+    "displayName": "Martin"
+  },
+  "s1mAccessCache": {
+    "b8094987-8d4b-4132-8c1d-e2bb9fa0bb21": {
+      "hasAccess": false,
+      "hasAccessNotAsDefault": false,
+      "timestamp": 1765804168720
+    }
+  }
+}
