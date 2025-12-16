@@ -188,10 +188,39 @@ public partial class HeavyMetalDkScraper : IConcertScraper
         var isCancelled = dateText.Contains("Aflyst", StringComparison.OrdinalIgnoreCase);
         var isNew = dateText.Contains("Ny", StringComparison.Ordinal);
 
+        // Extract venue (required)
+        var venue = "";
+        var venueLink = row.SelectSingleNode(".//td[@class='event-venue']//a[@itemprop='url']");
+        if (venueLink != null)
+        {
+            // Venue text includes location like "Pumpehuset, København V"
+            // We'll extract just the venue name (before the comma)
+            var venueText = venueLink.InnerText.Trim();
+            var commaIndex = venueText.IndexOf(',');
+            venue = commaIndex > 0 ? venueText.Substring(0, commaIndex).Trim() : venueText;
+        }
+
+        // Extract concert info URL and ID (required)
+        var concertUrl = "";
+        var concertId = "";
+        var infoLink = row.SelectSingleNode(".//td[@class='event-meta']//a");
+        if (infoLink != null)
+        {
+            var href = infoLink.GetAttributeValue("href", "");
+            if (!string.IsNullOrWhiteSpace(href))
+            {
+                concertUrl = href.StartsWith("http") ? href : $"https://heavymetal.dk{href}";
+                concertId = ExtractIdFromUrl(href);
+            }
+        }
+
         var concert = new Concert
         {
+            Id = concertId,
             Date = concertDate,
             DayOfWeek = dayOfWeek,
+            Venue = venue,
+            ConcertUrl = concertUrl,
             IsCancelled = isCancelled,
             IsNew = isNew,
             ScrapedAt = DateTime.UtcNow
@@ -227,29 +256,6 @@ public partial class HeavyMetalDkScraper : IConcertScraper
                         concert.Artists.Add(artistName);
                     }
                 }
-            }
-        }
-
-        // Extract venue
-        var venueLink = row.SelectSingleNode(".//td[@class='event-venue']//a[@itemprop='url']");
-        if (venueLink != null)
-        {
-            // Venue text includes location like "Pumpehuset, København V"
-            // We'll extract just the venue name (before the comma)
-            var venueText = venueLink.InnerText.Trim();
-            var commaIndex = venueText.IndexOf(',');
-            concert.Venue = commaIndex > 0 ? venueText.Substring(0, commaIndex).Trim() : venueText;
-        }
-
-        // Extract concert info URL
-        var infoLink = row.SelectSingleNode(".//td[@class='event-meta']//a");
-        if (infoLink != null)
-        {
-            var href = infoLink.GetAttributeValue("href", "");
-            if (!string.IsNullOrWhiteSpace(href))
-            {
-                concert.ConcertUrl = href.StartsWith("http") ? href : $"https://heavymetal.dk{href}";
-                concert.Id = ExtractIdFromUrl(href);
             }
         }
 
