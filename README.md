@@ -70,7 +70,7 @@ MetalWatch/
 
 ## Technology Stack
 
-- **Language**: C# (.NET 8.0)
+- **Language**: C# (.NET 10.0)
 - **Web Scraping**: HtmlAgilityPack
 - **Email**: MailKit
 - **Deployment**: Containerized worker service with systemd timers or Kubernetes CronJob
@@ -138,7 +138,7 @@ Concerts with a score > 0 are included in notifications.
 
 ### Prerequisites
 
-- .NET 8.0 SDK
+- .NET 10.0 SDK
 - Docker (optional, for MinIO local testing)
 
 ### Local Development
