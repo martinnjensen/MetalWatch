@@ -13,7 +13,7 @@ public class NotificationResult
     /// <summary>
     /// Message describing the result or error
     /// </summary>
-    public string? Message { get; set; }
+    public required string Message { get; set; }
 
     /// <summary>
     /// Number of concerts included in the notification
