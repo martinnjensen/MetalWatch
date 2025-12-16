@@ -8,7 +8,7 @@ public class Concert
     /// <summary>
     /// Unique identifier derived from concert URL slug
     /// </summary>
-    public string Id { get; set; } = string.Empty;
+    public string? Id { get; set; }
 
     /// <summary>
     /// Date of the concert
@@ -18,7 +18,7 @@ public class Concert
     /// <summary>
     /// Day of week in Danish (e.g., "man", "tir", "ons")
     /// </summary>
-    public string DayOfWeek { get; set; } = string.Empty;
+    public string? DayOfWeek { get; set; }
 
     /// <summary>
     /// List of artists performing (supports multi-artist shows and festivals)
@@ -28,12 +28,12 @@ public class Concert
     /// <summary>
     /// Venue name where the concert takes place
     /// </summary>
-    public string Venue { get; set; } = string.Empty;
+    public string? Venue { get; set; }
 
     /// <summary>
     /// Full URL to the concert details page
     /// </summary>
-    public string ConcertUrl { get; set; } = string.Empty;
+    public string? ConcertUrl { get; set; }
 
     /// <summary>
     /// Indicates if the concert has been cancelled
