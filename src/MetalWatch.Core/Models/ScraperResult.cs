@@ -17,7 +17,7 @@ public class ScraperResult
     public List<Concert> Concerts { get; set; } = new();
 
     /// <summary>
-    /// Error message if scraping failed
+    /// Error message if scraping failed (empty if successful)
     /// </summary>
     public string? ErrorMessage { get; set; }
 
