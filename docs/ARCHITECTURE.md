@@ -2,7 +2,41 @@
 
 ## Overview
 
-MetalWatch follows Clean Architecture principles with clear separation between domain logic, infrastructure concerns, and hosting.
+MetalWatch is a concert monitoring service that scrapes heavy metal concerts from various concert sites and sends personalized notifications based on user preferences.
+
+**Core Purpose**: Help heavy metal fans discover concerts they'll love without manually checking websites daily.
+
+The system follows Clean Architecture principles with clear separation between domain logic, infrastructure concerns, and hosting.
+
+## Technology Stack
+
+- **Language**: C# (.NET 10.0)
+- **Architecture**: Clean Architecture (Core → Infrastructure → Worker)
+- **Key Libraries**:
+  - `HtmlAgilityPack` - HTML parsing for web scraping
+  - `MailKit` - Email notifications
+  - `xUnit` - Testing framework
+- **Deployment**: Worker service designed for EU sovereign cloud providers
+- **Storage**: S3-compatible object storage (MinIO, OpenStack Swift, etc.)
+
+## Project Structure
+
+```
+MetalWatch/
+├── src/
+│   ├── MetalWatch.Core/           # Domain logic (framework-independent)
+│   │   ├── Models/                # Domain entities
+│   │   ├── Interfaces/            # Contracts/abstractions
+│   │   └── Services/              # Core business services
+│   ├── MetalWatch.Infrastructure/ # External integrations
+│   │   ├── Scrapers/              # Concert source implementations
+│   │   ├── Storage/               # Data persistence
+│   │   └── Notifications/         # Notification channels
+│   └── MetalWatch.Worker/         # Background service host
+├── tests/
+│   └── MetalWatch.Tests/          # Unit and integration tests
+└── docs/                          # Architecture and planning docs
+```
 
 ## Layer Breakdown
 
@@ -12,64 +46,81 @@ The core layer contains all business logic and is independent of external framew
 
 #### Models
 
-**Concert.cs**
+**Concert** - Represents a concert event
+
 ```csharp
 public class Concert
 {
-    public string Id { get; set; }              // Unique identifier (URL slug)
-    public DateTime Date { get; set; }          // Concert date
-    public string DayOfWeek { get; set; }       // Day of week (in Danish)
-    public List<string> Artists { get; set; }   // Performing artists
-    public string Venue { get; set; }           // Venue name
-    public string ConcertUrl { get; set; }      // Link to concert page
-    public bool IsCancelled { get; set; }       // Marked as "Aflyst"
-    public bool IsNew { get; set; }             // Marked as "Ny"
-    public bool IsFestival { get; set; }        // Multi-artist event
-    public DateTime ScrapedAt { get; set; }     // When data was collected
+    public required string Id { get; set; }           // Unique identifier (URL slug)
+    public DateTime Date { get; set; }                // Concert date
+    public required string DayOfWeek { get; set; }    // Day of week (standardized by scraper)
+    public List<string> Artists { get; set; } = new(); // Performing artists
+    public required string Venue { get; set; }        // Venue name
+    public required string ConcertUrl { get; set; }   // Link to concert page
+    public bool IsCancelled { get; set; }             // Concert cancelled
+    public bool IsNew { get; set; }                   // Newly added concert
+    public bool IsFestival { get; set; }              // Multi-artist event
+    public DateTime ScrapedAt { get; set; }           // When data was collected
 }
 ```
 
-**ConcertPreferences.cs**
+**Important**: The domain model uses standard .NET types. Individual scrapers handle translation from site-specific formats (e.g., Danish day names, date formats, cancellation markers) to these standardized properties.
+
+**ConcertPreferences** - User preferences for filtering
+
 ```csharp
 public class ConcertPreferences
 {
-    public List<string> FavoriteArtists { get; set; }
-    public List<string> FavoriteVenues { get; set; }
-    public List<string> Keywords { get; set; }  // Genre keywords to match
-    public DateTime? StartDate { get; set; }    // Filter concerts after date
-    public DateTime? EndDate { get; set; }      // Filter concerts before date
-    public string NotificationEmail { get; set; }
+    public List<string> FavoriteArtists { get; set; } = new();
+    public List<string> FavoriteVenues { get; set; } = new();
+    public List<string> Keywords { get; set; } = new();
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public string? NotificationEmail { get; set; }
 }
 ```
 
-**NotificationResult.cs**
+**NotificationResult** - Result of notification operations
+
 ```csharp
 public class NotificationResult
 {
     public bool Success { get; set; }
-    public string Message { get; set; }
+    public required string Message { get; set; }
     public int ConcertsNotified { get; set; }
+    public DateTime SentAt { get; set; }
+}
+```
+
+**ScraperResult** - Result of scraping operations
+
+```csharp
+public class ScraperResult
+{
+    public bool Success { get; set; }
+    public List<Concert> Concerts { get; set; } = new();
+    public string? ErrorMessage { get; set; }
+    public int ConcertsScraped { get; set; }
+    public DateTime ScrapedAt { get; set; }
 }
 ```
 
 #### Interfaces
 
-**IConcertScraper.cs**
-- Abstracts the web scraping functionality
-- Allows testing with mock scrapers
-- Can support multiple concert sources
+**IConcertScraper** - Web scraping abstraction
 
 ```csharp
 public interface IConcertScraper
 {
-    Task<List<Concert>> ScrapeAsync(string url, CancellationToken cancellationToken = default);
+    Task<ScraperResult> ScrapeAsync(string url, CancellationToken cancellationToken = default);
 }
 ```
 
-**IConcertMatcher.cs**
-- Encapsulates matching logic
-- Scores concerts based on preferences
-- Filters and ranks results
+- Abstracts the web scraping functionality
+- Allows testing with mock scrapers
+- Supports multiple concert sources
+
+**IConcertMatcher** - Concert matching logic
 
 ```csharp
 public interface IConcertMatcher
@@ -79,10 +130,11 @@ public interface IConcertMatcher
 }
 ```
 
-**INotificationService.cs**
-- Pluggable notification system
-- Supports multiple implementations (email, Slack, Discord)
-- Returns result for logging/monitoring
+- Encapsulates matching logic
+- Scores concerts based on preferences
+- Filters and ranks results
+
+**INotificationService** - Notification abstraction
 
 ```csharp
 public interface INotificationService
@@ -93,10 +145,11 @@ public interface INotificationService
 }
 ```
 
-**IDataStore.cs**
-- Abstract storage layer
-- Supports different backends (JSON, Blob, Database)
-- Handles concert history and preferences
+- Pluggable notification system
+- Supports multiple implementations (email, Slack, Discord)
+- Returns result for logging/monitoring
+
+**IDataStore** - Storage abstraction
 
 ```csharp
 public interface IDataStore
@@ -107,22 +160,36 @@ public interface IDataStore
 }
 ```
 
+- Abstract storage layer
+- Supports different backends (JSON, S3-compatible, Database)
+- Handles concert history and preferences
+
+**IScraperFactory** - Creates appropriate scraper for source
+
+```csharp
+public interface IScraperFactory
+{
+    IConcertScraper CreateScraper(string sourceUrl);
+}
+```
+
 #### Services
 
-**ConcertScraperService.cs**
-- Orchestrates scraping process
-- Handles parsing and normalization
-- Error handling for network issues
+**ConcertMatcherService** - Implements matching algorithm
 
-**ConcertMatcherService.cs**
 - Implements scoring algorithm
 - Filters concerts by date range
 - Returns sorted results by relevance
 
-**ConcertTrackerService.cs**
-- Main orchestrator service
-- Coordinates scraping, matching, and notification
-- Implements the daily workflow logic
+**Scoring Algorithm**:
+
+| Match Type | Points |
+|------------|--------|
+| Exact artist match (case-insensitive) | +100 |
+| Favorite venue | +50 |
+| Keyword in artist name | +25 per keyword |
+
+Concerts with score > 0 are included in notifications, sorted by score descending.
 
 ### Infrastructure Layer (MetalWatch.Infrastructure)
 
@@ -130,46 +197,51 @@ The infrastructure layer implements the interfaces defined in Core using externa
 
 #### Scrapers
 
-**HeavyMetalDkScraper.cs**
+**HeavyMetalDkScraper** - Scraper for heavymetal.dk
+
 - Implements `IConcertScraper` for heavymetal.dk
 - Uses HtmlAgilityPack for HTML parsing
 - Handles Danish date format parsing
 - Extracts concert details from page structure
+- Translates Danish markers ("Aflyst", "Ny") to boolean flags
+- Normalizes venue names (strips location suffixes)
 
-**Parsing Strategy**:
-1. Load HTML document
-2. Find all text nodes and anchor tags
-3. Use state machine to group related elements:
-   - Date pattern: `dd/mm (Day)` → Start new concert
-   - Artist links: `/artist/*` → Add to current concert
-   - Venue links: `/spillested/*` → Set venue for current concert
-   - Concert links: `/koncert/*` → Set URL for current concert
-4. Handle special markers ("Aflyst", "Ny")
-5. Normalize dates to DateTime objects
+**General Scraping Strategy**:
+- Each concert source implements `IConcertScraper` interface
+- Parse HTML using `HtmlAgilityPack` with XPath selectors
+- Return standardized `Concert` objects regardless of source
+- Handle encoding properly (UTF-8 for special characters)
+- Extract required fields: Id, Venue, ConcertUrl
+- Extract standard fields: Date (DateTime)
+- Support optional fields: DayOfWeek, Artists, IsCancelled, IsNew, IsFestival
 
-**Key XPath/Selectors**:
-- Concert entries: Sequential text and anchor nodes
-- Artists: `//a[contains(@href, '/artist/')]`
-- Venues: `//a[contains(@href, '/spillested/')]`
-- Concert details: `//a[contains(@href, '/koncert/')]`
+**ScraperFactory** - Routes to appropriate scraper
+
+- Examines source URL to determine which scraper to use
+- Returns appropriate `IConcertScraper` implementation
+- Extensible for additional concert sources
 
 #### Storage
 
-**JsonDataStore.cs**
-- File-based storage for local development
+**JsonDataStore** - File-based storage for development
+
 - Stores concerts in `concert-data/concerts.json`
 - Stores preferences in `concert-data/preferences.json`
 - Simple and portable
+- Used for local development
 
-**BlobStorageDataStore.cs**
-- Production storage using Azure Blob Storage
+**S3CompatibleDataStore** - Production storage
+
+- Uses S3-compatible object storage (MinIO, OpenStack Swift, etc.)
 - Stores data as JSON blobs
-- Leverages Azure's durability and availability
+- Supports any S3-compatible provider
 - Cost-effective for small data volumes
+- Works with EU sovereign cloud providers (Hetzner, OVHcloud, IONOS)
 
 #### Notifications
 
-**EmailNotificationService.cs**
+**EmailNotificationService** - Email implementation
+
 - Implements email notifications using MailKit
 - Generates HTML email with concert details
 - Includes relevance indicators (favorite artist/venue)
@@ -177,7 +249,7 @@ The infrastructure layer implements the interfaces defined in Core using externa
 
 **Email Template Structure**:
 ```
-Subject: 🎸 X New Metal Concerts in Copenhagen - [Date]
+Subject: 🎸 X New Metal Concerts - [Date]
 
 Body:
 - Header with date and count
@@ -186,37 +258,28 @@ Body:
   - Artist names (highlighted if favorite)
   - Venue (highlighted if favorite)
   - Direct link to concert page
-- Footer with how to update preferences
+- Footer with preference update instructions
 ```
 
-### Function Layer (MetalWatch.Function)
+### Worker Layer (MetalWatch.Worker)
 
-Thin hosting layer for Azure Functions.
+Thin hosting layer for background service.
 
-**DailyConcertCheck.cs**
-- Timer trigger: `0 0 8 * * *` (8 AM daily)
+**DailyConcertCheckWorker** - Scheduled background worker
+
+- Runs on configured schedule (e.g., daily at 8 AM)
 - Dependency injection setup
 - Logging configuration
-- Invokes `IConcertTrackerService`
-
-**host.json**
-- Function app configuration
-- Logging levels
-- Timer trigger settings
-
-**local.settings.json**
-- Local development settings
-- Connection strings
-- Application configuration
+- Invokes orchestration service
 
 ## Data Flow
 
 ```
-Timer Trigger (8:00 AM)
+Timer/Schedule
     ↓
-DailyConcertCheck Function
+Worker Service
     ↓
-ConcertTrackerService.CheckAndNotifyAsync()
+Orchestration Service
     ↓
 ┌──────────────────────────────────────────┐
 │ 1. Load previous concerts from storage  │
@@ -239,8 +302,50 @@ All services are registered in the DI container:
 services.AddScoped<IConcertScraper, HeavyMetalDkScraper>();
 services.AddScoped<IConcertMatcher, ConcertMatcherService>();
 services.AddScoped<INotificationService, EmailNotificationService>();
-services.AddScoped<IDataStore, BlobStorageDataStore>(); // or JsonDataStore
-services.AddScoped<IConcertTrackerService, ConcertTrackerService>();
+services.AddScoped<IDataStore, S3CompatibleDataStore>(); // or JsonDataStore for dev
+services.AddScoped<IScraperFactory, ScraperFactory>();
+```
+
+## Configuration
+
+### Environment-Specific Settings
+
+- **Development**: `appsettings.Development.json`
+- **Production**: Environment variables or config file
+- **Secrets**: Use environment variables or secret managers (never commit)
+
+### Key Configuration Sections
+
+```json
+{
+  "MetalWatch": {
+    "SourceUrl": "https://heavymetal.dk/koncertkalender?landsdel=koebenhavn",
+    "Preferences": {
+      "FavoriteArtists": ["Metallica", "Iron Maiden"],
+      "FavoriteVenues": ["Pumpehuset", "VEGA"],
+      "Keywords": ["thrash", "death metal"]
+    },
+    "Notification": {
+      "Type": "Email",
+      "Email": {
+        "To": "your@email.com",
+        "From": "concerts@yourdomain.com",
+        "SmtpHost": "smtp.gmail.com",
+        "SmtpPort": 587,
+        "Username": "your@gmail.com",
+        "Password": "***"
+      }
+    },
+    "Storage": {
+      "Type": "S3Compatible",
+      "S3Endpoint": "https://s3.eu-central-1.example.com",
+      "S3AccessKey": "***",
+      "S3SecretKey": "***",
+      "S3BucketName": "concert-data",
+      "S3Region": "eu-central-1"
+    }
+  }
+}
 ```
 
 ## Extensibility Points
@@ -253,6 +358,7 @@ services.AddScoped<IConcertTrackerService, ConcertTrackerService>();
 4. Optionally support multiple channels simultaneously
 
 Example: Slack Notification
+
 ```csharp
 public class SlackNotificationService : INotificationService
 {
@@ -288,8 +394,9 @@ public class SlackNotificationService : INotificationService
 
 1. Create class implementing `IConcertScraper`
 2. Implement parsing logic for the new site
-3. Register in DI container
-4. Update configuration with new source URL
+3. Translate site-specific formats to standardized `Concert` properties
+4. Register in `ScraperFactory`
+5. Add test fixtures and tests
 
 ### Adding Database Storage
 
@@ -298,64 +405,58 @@ public class SlackNotificationService : INotificationService
 3. Implement CRUD operations
 4. Register in DI with connection string
 
-## Configuration Management
-
-**Local Development**: `local.settings.json`
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
-  },
-  "MetalWatch": {
-    // Configuration here
-  }
-}
-```
-
-**Production**: Azure Function Application Settings
-- Use Azure Key Vault references for secrets
-- Example: `@Microsoft.KeyVault(SecretUri=https://...)`
-
 ## Error Handling
 
 **Scraping Failures**:
-- Retry logic with exponential backoff
+- Return `ScraperResult` with `Success = false`
 - Log detailed error information
-- Send alert if multiple consecutive failures
+- Continue workflow (don't crash)
 
 **Notification Failures**:
+- Return `NotificationResult` with `Success = false`
 - Log but don't block the workflow
-- Store failed notifications for retry
 - Consider fallback notification channel
 
 **Storage Failures**:
-- Critical failure - should alert immediately
+- Critical failure - should log and alert
 - Without storage, we can't track concert history
 
-## Monitoring and Observability
+## Performance Considerations
 
-**Logging**:
-- Structured logging using `ILogger`
-- Log levels: Information, Warning, Error
-- Key events: Scrape start/end, matches found, notifications sent
+- Single HTTP request per scrape (downloads full calendar page)
+- Efficient HTML parsing with XPath selectors
+- Minimal memory footprint (<50MB typical)
+- Fast execution (<5 seconds end-to-end)
 
-**Metrics** (via Azure Application Insights):
-- Concert count per execution
-- Match count per execution
-- Notification success/failure rate
-- Execution duration
+## Deployment Architecture
 
-**Alerts**:
-- Failed function executions
-- Zero concerts scraped (possible site change)
-- Notification failures
+### EU Sovereign Cloud Deployment
+
+```
+EU Cloud Provider (Hetzner/OVHcloud/IONOS)
+├── VM or Container Service
+│   └── Worker Service (scheduled execution)
+├── S3-Compatible Object Storage
+│   └── concert-data bucket
+└── (Optional) Email Service
+```
+
+### Cost Estimation (EU Sovereign Cloud)
+
+**Hetzner Cloud (German Provider)**:
+- CX11 VM (2 vCPU, 2GB RAM): ~€4/month
+- Object Storage (250 GB included): ~€5/month
+- **Total**: ~€9/month
+
+**OVHcloud (French Provider)**:
+- B2-7 VM (2 vCPU, 7GB RAM): ~€7/month
+- Object Storage (Pay-as-you-go): ~€0.01/GB
+- **Total**: ~€7-10/month
 
 ## Security Considerations
 
 **Credentials**:
-- Store in Azure Key Vault
+- Store in environment variables or secret managers
 - Never commit to source control
 - Rotate regularly
 
@@ -370,72 +471,17 @@ public class SlackNotificationService : INotificationService
 - No PII logged
 - Comply with GDPR (European deployment)
 
-## Performance Optimization
+## Known Issues & Quirks
 
-**Scraping**:
-- Single HTTP request per execution
-- Efficient HTML parsing
-- Minimal memory footprint
+### Website Scraping
 
-**Storage**:
-- JSON files < 1 MB
-- Blob storage with CDN if needed
-- No database overhead for simple use case
+- HTML structures may change without notice - monitor for parsing failures
+- Implement graceful degradation when parsing fails
+- Consider date format variations (DD/MM vs MM/DD, year handling)
+- Normalize venue names (strip location suffixes, standardize formatting)
 
-**Notifications**:
-- Batch emails if multiple recipients
-- Async processing
-- Timeout handling
+### Date Handling
 
-## Testing Strategy
-
-**Unit Tests**:
-- Core services with mocked dependencies
-- Matching algorithm validation
-- Date parsing edge cases
-
-**Integration Tests**:
-- Full workflow with real scraper
-- Storage round-trip tests
-- Notification delivery tests
-
-**End-to-End Tests**:
-- Deployed function execution
-- Azure resources connectivity
-- Email delivery verification
-
-## Deployment Architecture
-
-```
-Azure Resource Group (West Europe)
-├── Function App (Consumption Plan)
-│   ├── Application Insights
-│   └── Application Settings
-├── Storage Account
-│   ├── Function App Storage
-│   └── Blob Container (concert-data)
-└── Key Vault (optional)
-    ├── Email Password
-    └── Storage Connection String
-```
-
-## Cost Breakdown
-
-**Azure Functions Consumption Plan**:
-- 1 execution/day = ~30 executions/month
-- ~5 seconds per execution
-- Free tier: 1M executions, 400,000 GB-s
-- Cost: €0 (within free tier)
-
-**Blob Storage**:
-- ~10 KB concert data
-- ~1 KB preferences
-- Minimal transactions
-- Cost: <€0.10/month
-
-**Application Insights**:
-- Minimal telemetry
-- Free tier: 5 GB/month
-- Cost: €0 (within free tier)
-
-**Total Monthly Cost**: <€1
+- Always extract timezone information or default to event location timezone
+- Handle year rollover properly (events in December/January)
+- Support multiple date formats depending on source
