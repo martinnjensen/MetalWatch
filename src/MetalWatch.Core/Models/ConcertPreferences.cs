@@ -33,5 +33,5 @@ public class ConcertPreferences
     /// <summary>
     /// Email address for notifications
     /// </summary>
-    public string NotificationEmail { get; set; } = string.Empty;
+    public string? NotificationEmail { get; set; }
 }

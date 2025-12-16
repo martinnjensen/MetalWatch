@@ -19,7 +19,7 @@ public class ScraperResult
     /// <summary>
     /// Error message if scraping failed
     /// </summary>
-    public string ErrorMessage { get; set; } = string.Empty;
+    public string? ErrorMessage { get; set; }
 
     /// <summary>
     /// Number of concerts successfully scraped
