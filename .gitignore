@@ -410,3 +410,8 @@ appsettings.Development.json
 appsettings.Local.json
 concert-data/
 *.db
+
+# Claude Code temporary files
+.claude/
+.claude.json
+.claude.json.backup
