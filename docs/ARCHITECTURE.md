@@ -19,6 +19,91 @@ The system follows Clean Architecture principles with clear separation between d
 - **Deployment**: Worker service designed for EU sovereign cloud providers
 - **Storage**: S3-compatible object storage (MinIO, OpenStack Swift, etc.)
 
+## Architectural Principles
+
+### Clean Architecture
+MetalWatch follows Clean Architecture with three main layers:
+- **Core**: Domain models, business logic, interfaces (framework-independent)
+- **Infrastructure**: External integrations (scrapers, storage, notifications)
+- **Worker**: Thin hosting layer for background service
+
+### Event-Driven Design
+- Domain events decouple separate concerns
+- Scraping/storage and notifications run in separate transaction scopes
+- In-memory event bus (Phase 1), swappable with message queue later
+- Enables resilience: notification failures don't affect data persistence
+
+### Stateless Service
+- Worker container has no local state dependencies
+- All persistent data stored externally (S3-compatible storage)
+- Containers can be started, stopped, or replaced without data loss
+- Cloud-native and container-ready
+
+### EU Sovereignty
+- No vendor lock-in to cloud providers
+- S3-compatible storage works with any provider
+- Designed for EU sovereign cloud deployment (Hetzner, OVHcloud, IONOS)
+
+## Data Flow
+
+### Event-Driven Architecture with Per-Source Orchestration
+
+```
+Timer/Schedule (Phase 3+)
+    ↓
+Worker Service
+    ↓
+Calls orchestrator with source URL
+    ↓
+Orchestration Service (per source)
+    ↓
+┌─────────────────────────────────────────────────────────┐
+│ TRANSACTION 1: Scraping & Storage                      │
+│ ────────────────────────────────────────────────────── │
+│ 1. Load previously discovered concerts from storage    │
+│    (represents current state of all sources)           │
+│ 2. Scrape concerts from specified source URL           │
+│ 3. Generate unique IDs (Hash: date+venue+artist)       │
+│ 4. Identify new: IDs not in previous set               │
+│ 5. Save all scraped concerts (current website state)   │
+│ 6. Publish NewConcertsFoundEvent with ALL new concerts │
+└─────────────────────────────────────────────────────────┘
+    ↓
+Event Bus (in-memory pub/sub)
+    ↓
+┌─────────────────────────────────────────────────────────┐
+│ TRANSACTION 2: Notification (event-driven)             │
+│ ────────────────────────────────────────────────────── │
+│ NotificationEventHandler subscribes to event           │
+│   ↓                                                     │
+│ Receives ALL new concerts (unfiltered)                 │
+│   ↓                                                     │
+│ Load user preferences from storage                     │
+│   ↓                                                     │
+│ Match concerts using IConcertMatcher                   │
+│   ↓                                                     │
+│ Call INotificationService with matching concerts only  │
+│   ↓                                                     │
+│ Log result (if fails, scraping NOT rolled back)        │
+└─────────────────────────────────────────────────────────┘
+    ↓
+Log results (return OrchestrationResult)
+```
+
+**Key Design Decisions:**
+- **Event-driven architecture**: Decouples scraping/storage from notifications
+- **Separate transaction scopes**: Notification failure doesn't affect scraping
+- **Domain events**: `NewConcertsFoundEvent`, `ConcertsScrapedEvent`
+- **Event bus**: In-memory pub/sub (Phase 1), swappable with message queue later
+- **Per-source execution**: Each source URL processed independently
+- **Global storage**: All concerts from all sources stored together
+- **Global preferences**: Single preference set matches against all sources
+- **Single notification**: Combined notification for all matching concerts
+- **Deduplication**: Same concert from multiple sources gets same unique ID
+- **Concert ID**: Generated hash from (date + venue + first artist) - not source-dependent
+- **Phase 1**: Single source (heavymetal.dk)
+- **Future phases**: Multiple sources with independent schedules
+
 ## Project Structure
 
 ```
@@ -27,11 +112,13 @@ MetalWatch/
 │   ├── MetalWatch.Core/           # Domain logic (framework-independent)
 │   │   ├── Models/                # Domain entities
 │   │   ├── Interfaces/            # Contracts/abstractions
-│   │   └── Services/              # Core business services
+│   │   ├── Services/              # Core business services
+│   │   └── Events/                # Domain events
 │   ├── MetalWatch.Infrastructure/ # External integrations
 │   │   ├── Scrapers/              # Concert source implementations
 │   │   ├── Storage/               # Data persistence
-│   │   └── Notifications/         # Notification channels
+│   │   ├── Notifications/         # Notification channels
+│   │   └── Events/                # Event bus implementation
 │   └── MetalWatch.Worker/         # Background service host
 ├── tests/
 │   └── MetalWatch.Tests/          # Unit and integration tests
@@ -272,28 +359,6 @@ Thin hosting layer for background service.
 - Logging configuration
 - Invokes orchestration service
 
-## Data Flow
-
-```
-Timer/Schedule
-    ↓
-Worker Service
-    ↓
-Orchestration Service
-    ↓
-┌──────────────────────────────────────────┐
-│ 1. Load previous concerts from storage  │
-│ 2. Load user preferences                │
-│ 3. Scrape current concerts               │
-│ 4. Identify new concerts                 │
-│ 5. Match against preferences            │
-│ 6. Send notifications                    │
-│ 7. Save updated concert list             │
-└──────────────────────────────────────────┘
-    ↓
-Log results
-```
-
 ## Dependency Injection
 
 All services are registered in the DI container:
@@ -430,16 +495,46 @@ public class SlackNotificationService : INotificationService
 
 ## Deployment Architecture
 
+### Stateless Design Principle
+
+**MetalWatch is designed to be a stateless service:**
+- The worker container has no local state dependencies
+- All persistent data is stored externally (S3-compatible storage)
+- Containers can be started, stopped, or replaced without data loss
+- Enables easy horizontal scaling and cloud-native deployment
+
+**Storage Evolution:**
+- **Phase 1 (Development)**: `JsonDataStore` - Local file-based storage for testing
+  - Can run stateless (no persistence) or with volume mount (testing)
+- **Phase 5 (Production)**: `S3CompatibleDataStore` - External object storage
+  - Fully stateless deployment
+  - Data persists independently of container lifecycle
+
+**Benefits:**
+- Easy deployment to any container platform
+- No data loss when containers restart
+- Simple CI/CD pipeline
+- Cloud-provider agnostic
+
 ### EU Sovereign Cloud Deployment
 
 ```
 EU Cloud Provider (Hetzner/OVHcloud/IONOS)
-├── VM or Container Service
-│   └── Worker Service (scheduled execution)
-├── S3-Compatible Object Storage
-│   └── concert-data bucket
+├── Container Service (stateless)
+│   └── MetalWatch Worker (scheduled execution)
+├── S3-Compatible Object Storage (stateful)
+│   ├── concerts.json (concert history)
+│   └── preferences.json (user preferences)
 └── (Optional) Email Service
 ```
+
+**Container Lifecycle:**
+1. Container starts (no local state)
+2. Loads configuration from environment variables
+3. Connects to S3-compatible storage
+4. Executes workflow
+5. Saves results to external storage
+6. Container exits (no cleanup needed)
 
 ### Cost Estimation (EU Sovereign Cloud)
 
