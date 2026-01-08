@@ -52,6 +52,14 @@
 - ✅ ScraperFactory for automatic scraper selection
 - ✅ Extensibility architecture (Strategy pattern)
 
+### Phase 7: Domain Events & Event Bus
+- ✅ IDomainEvent marker interface with OccurredAt timestamp
+- ✅ IEventBus interface with PublishAsync and Subscribe methods
+- ✅ ConcertsScrapedEvent domain event
+- ✅ NewConcertsFoundEvent domain event
+- ✅ InMemoryEventBus implementation (ConcurrentDictionary-based pub/sub)
+- ✅ 9 unit tests for event bus functionality
+
 ## 🎯 Key Features Implemented
 
 1. **Extensible Scraper Architecture**
@@ -98,6 +106,17 @@
 - ✅ JSON storage round-trip
 - ✅ Error scenarios (no scraper, invalid name)
 - ✅ **Total: 8 test cases**
+
+### Event Bus Tests (InMemoryEventBusTests.cs)
+- ✅ Handler invocation on publish
+- ✅ Multiple handlers for same event type
+- ✅ No handlers scenario
+- ✅ Different event types isolation
+- ✅ Cancellation token passthrough
+- ✅ Domain event integration (ConcertsScrapedEvent, NewConcertsFoundEvent)
+- ✅ Exception propagation
+- ✅ Handler persistence across subscriptions
+- ✅ **Total: 9 test cases**
 
 ### Test Fixtures
 - full-calendar-2025-12-15.html (6 concerts, multiple months)
@@ -176,7 +195,8 @@ The following components are defined in the architecture but not yet implemented
 The implementation includes:
 - Complete scraper for heavymetal.dk
 - Extensible architecture for adding new sources
-- Comprehensive test suite with 21 tests
+- Domain events and in-memory event bus for decoupled workflows
+- Comprehensive test suite with 32 tests
 - Real HTML fixtures for accurate testing
 - Supporting services (matcher, storage, factory)
 - Clean architecture with proper separation of concerns
@@ -204,13 +224,19 @@ The project is ready for:
 - [Interfaces/IConcertScraper.cs](src/MetalWatch.Core/Interfaces/IConcertScraper.cs)
 - [Interfaces/IScraperFactory.cs](src/MetalWatch.Core/Interfaces/IScraperFactory.cs)
 - [Services/ConcertMatcherService.cs](src/MetalWatch.Core/Services/ConcertMatcherService.cs)
+- [Events/IDomainEvent.cs](src/MetalWatch.Core/Events/IDomainEvent.cs)
+- [Events/IEventBus.cs](src/MetalWatch.Core/Events/IEventBus.cs)
+- [Events/ConcertsScrapedEvent.cs](src/MetalWatch.Core/Events/ConcertsScrapedEvent.cs)
+- [Events/NewConcertsFoundEvent.cs](src/MetalWatch.Core/Events/NewConcertsFoundEvent.cs)
 
 ### Infrastructure (MetalWatch.Infrastructure)
 - [Scrapers/HeavyMetalDkScraper.cs](src/MetalWatch.Infrastructure/Scrapers/HeavyMetalDkScraper.cs) - **Core implementation**
 - [Scrapers/ScraperFactory.cs](src/MetalWatch.Infrastructure/Scrapers/ScraperFactory.cs)
 - [Storage/JsonDataStore.cs](src/MetalWatch.Infrastructure/Storage/JsonDataStore.cs)
+- [Events/InMemoryEventBus.cs](src/MetalWatch.Infrastructure/Events/InMemoryEventBus.cs) - **Event bus implementation**
 
 ### Tests (MetalWatch.Tests)
 - [Scrapers/HeavyMetalDkScraperTests.cs](tests/MetalWatch.Tests/Scrapers/HeavyMetalDkScraperTests.cs) - **13 unit tests**
 - [Integration/ScraperIntegrationTests.cs](tests/MetalWatch.Tests/Integration/ScraperIntegrationTests.cs) - **8 integration tests**
+- [Events/InMemoryEventBusTests.cs](tests/MetalWatch.Tests/Events/InMemoryEventBusTests.cs) - **9 unit tests**
 - [Fixtures/HeavyMetalDk/](tests/MetalWatch.Tests/Fixtures/HeavyMetalDk/) - **6 HTML fixtures**
