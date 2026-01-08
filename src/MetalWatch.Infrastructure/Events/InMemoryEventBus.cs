@@ -1,5 +1,6 @@
 namespace MetalWatch.Infrastructure.Events;
 
+using System.Collections.Concurrent;
 using MetalWatch.Core.Events;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Logging;
 public class InMemoryEventBus : IEventBus
 {
     private readonly ILogger<InMemoryEventBus> _logger;
+    private readonly ConcurrentDictionary<Type, List<object>> _handlers = new();
 
     /// <summary>
     /// Initializes a new instance of <see cref="InMemoryEventBus"/>
@@ -22,17 +24,41 @@ public class InMemoryEventBus : IEventBus
     }
 
     /// <inheritdoc />
-    public Task PublishAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default)
+    public async Task PublishAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default)
         where TEvent : IDomainEvent
     {
-        // TODO: Implement event publishing
-        return Task.CompletedTask;
+        var eventType = typeof(TEvent);
+
+        if (!_handlers.TryGetValue(eventType, out var handlers))
+        {
+            _logger.LogDebug("No handlers registered for event type {EventType}", eventType.Name);
+            return;
+        }
+
+        _logger.LogDebug("Publishing {EventType} to {HandlerCount} handler(s)", eventType.Name, handlers.Count);
+
+        foreach (var handler in handlers)
+        {
+            var typedHandler = (Func<TEvent, CancellationToken, Task>)handler;
+            await typedHandler(domainEvent, cancellationToken);
+        }
     }
 
     /// <inheritdoc />
     public void Subscribe<TEvent>(Func<TEvent, CancellationToken, Task> handler)
         where TEvent : IDomainEvent
     {
-        // TODO: Implement subscription registration
+        var eventType = typeof(TEvent);
+
+        _handlers.AddOrUpdate(
+            eventType,
+            _ => new List<object> { handler },
+            (_, existing) =>
+            {
+                existing.Add(handler);
+                return existing;
+            });
+
+        _logger.LogDebug("Subscribed handler for event type {EventType}", eventType.Name);
     }
 }
