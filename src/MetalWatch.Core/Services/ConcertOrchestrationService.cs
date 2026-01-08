@@ -116,6 +116,9 @@ public class ConcertOrchestrationService : IConcertOrchestrationService
             .ToList();
 
         // Save all scraped concerts
+        // TODO: Consider batching saves across all sources - merge scraped concerts into a single
+        // list (using ID-based deduplication) and perform one write at the end of ExecuteDueWorkflowsAsync.
+        // This would be safer (works with any storage backend semantics) and more performant.
         await _dataStore.SaveConcertsAsync(scrapedConcerts);
 
         // Track published events

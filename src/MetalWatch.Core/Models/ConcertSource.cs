@@ -28,9 +28,9 @@ public class ConcertSource
     public required string Url { get; set; }
 
     /// <summary>
-    /// How often this source should be scraped
+    /// How often this source should be scraped (defaults to 24 hours)
     /// </summary>
-    public TimeSpan ScrapeInterval { get; set; }
+    public TimeSpan ScrapeInterval { get; set; } = TimeSpan.FromHours(24);
 
     /// <summary>
     /// When this source was last scraped (null if never attempted)
