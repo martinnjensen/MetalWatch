@@ -77,4 +77,23 @@ public class JsonDataStore : IDataStore
         var json = JsonSerializer.Serialize(preferences, _jsonOptions);
         await File.WriteAllTextAsync(path, json);
     }
+
+    /// <inheritdoc />
+    public Task<List<ConcertSource>> GetSourcesDueForScrapingAsync(CancellationToken cancellationToken = default)
+    {
+        // TODO: Implement source retrieval logic
+        throw new NotImplementedException();
+    }
+
+    /// <inheritdoc />
+    public Task UpdateSourceScrapedAsync(
+        string sourceId,
+        DateTime scrapedAt,
+        bool success,
+        string? errorMessage = null,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Implement scrape status update logic
+        throw new NotImplementedException();
+    }
 }

@@ -1,20 +1,25 @@
 namespace MetalWatch.Core.Models;
 
 /// <summary>
-/// Result object returned from orchestration workflow execution
+/// Result object returned from orchestration workflow execution for a single source
 /// Contains details about scraping, new concert detection, and events published
 /// </summary>
 public class OrchestrationResult
 {
     /// <summary>
-    /// Indicates if the orchestration workflow completed successfully
+    /// Indicates if the orchestration workflow completed successfully for this source
     /// </summary>
     public bool Success { get; set; }
 
     /// <summary>
-    /// The source URL that was processed
+    /// The ID of the source that was processed
     /// </summary>
-    public required string SourceUrl { get; set; }
+    public required string SourceId { get; set; }
+
+    /// <summary>
+    /// The name of the source that was processed
+    /// </summary>
+    public required string SourceName { get; set; }
 
     /// <summary>
     /// Total number of concerts scraped from the source

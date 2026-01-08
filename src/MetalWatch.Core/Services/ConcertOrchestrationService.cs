@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Orchestrates the concert discovery workflow.
-/// Coordinates scraping, new concert detection, storage, and event publishing.
+/// Retrieves due sources, coordinates scraping, new concert detection, storage, and event publishing.
 /// </summary>
 public class ConcertOrchestrationService : IConcertOrchestrationService
 {
@@ -32,8 +32,7 @@ public class ConcertOrchestrationService : IConcertOrchestrationService
     }
 
     /// <inheritdoc />
-    public Task<OrchestrationResult> ExecuteWorkflowAsync(
-        string sourceUrl,
+    public Task<List<OrchestrationResult>> ExecuteDueWorkflowsAsync(
         CancellationToken cancellationToken = default)
     {
         // TODO: Implement workflow logic
