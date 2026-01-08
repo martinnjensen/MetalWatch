@@ -15,13 +15,16 @@
 - ✅ ConcertPreferences model for user preferences
 - ✅ ScraperResult model for graceful error handling
 - ✅ NotificationResult model for notification tracking
+- ✅ ConcertSource model for source configuration and scheduling
+- ✅ OrchestrationResult model for workflow execution details
 
 ### Phase 3: Core Interfaces
 - ✅ IConcertScraper - Extensible scraper contract
 - ✅ IScraperFactory - Strategy pattern for scraper selection
 - ✅ IConcertMatcher - Concert matching and scoring
-- ✅ IDataStore - Storage abstraction
+- ✅ IDataStore - Storage abstraction (extended with source management)
 - ✅ INotificationService - Pluggable notifications
+- ✅ IConcertOrchestrationService - Workflow orchestration
 
 ### Phase 4: HeavyMetalDkScraper Implementation
 - ✅ State machine parser for sequential HTML nodes
@@ -60,6 +63,33 @@
 - ✅ InMemoryEventBus implementation (ConcurrentDictionary-based pub/sub)
 - ✅ 9 unit tests for event bus functionality
 
+### Phase 8: Source Management & Orchestration
+- ✅ ConcertSource model with scheduling metadata
+  - Id, Name, ScraperType, Url, ScrapeInterval fields
+  - LastScrapedAt, LastScrapeSuccess, LastScrapeError for status tracking
+  - Enabled flag for source activation/deactivation
+- ✅ OrchestrationResult model for workflow execution details
+  - SourceId, SourceName, ConcertsScraped, NewConcertsCount
+  - EventsPublished list, ErrorMessage, ExecutedAt timestamp
+- ✅ IDataStore extensions for source management
+  - GetSourcesDueForScrapingAsync() returns enabled sources due for scraping
+  - UpdateSourceScrapedAsync() updates source status after scrape attempts
+- ✅ IConcertOrchestrationService interface
+  - ExecuteDueWorkflowsAsync() method for source-based workflow
+- ✅ ConcertOrchestrationService implementation
+  - Retrieves due sources and processes each independently
+  - Generates deterministic concert IDs (SHA256 hash of venue|date|artists)
+  - Identifies new concerts by comparing with stored concert IDs
+  - Publishes NewConcertsFoundEvent for new concerts
+  - Updates source status on both success and failure
+  - Returns OrchestrationResult list (one per source)
+- ✅ 21 unit tests for ConcertOrchestrationService
+  - Source retrieval and scraper selection
+  - Scraping and concert persistence
+  - New concert detection and event publishing
+  - Failure handling and status updates
+  - Deterministic ID generation
+
 ## 🎯 Key Features Implemented
 
 1. **Extensible Scraper Architecture**
@@ -83,6 +113,14 @@
    - UTF-8 encoding for æ, ø, å characters
    - Danish month name parsing
    - Danish day-of-week preservation
+
+5. **Source-Based Orchestration**
+   - ConcertSource model for managing multiple sources with independent schedules
+   - Deterministic concert ID generation (SHA256 hash of venue|date|artists)
+   - New concert detection by comparing IDs with stored concerts
+   - Source status tracking (LastScrapedAt, LastScrapeSuccess, LastScrapeError)
+   - Status updates on both success and failure to prevent excessive retries
+   - Event-driven workflow with NewConcertsFoundEvent publishing
 
 ## 📊 Test Results Summary
 
@@ -118,6 +156,19 @@
 - ✅ Handler persistence across subscriptions
 - ✅ **Total: 9 test cases**
 
+### Orchestration Service Tests (ConcertOrchestrationServiceTests.cs)
+- ✅ Source retrieval from data store
+- ✅ Scraper selection by ScraperType
+- ✅ Concert scraping and persistence
+- ✅ New concert detection by ID comparison
+- ✅ Event publishing for new concerts
+- ✅ Source status updates (success and failure)
+- ✅ Deterministic concert ID generation
+- ✅ Multiple source processing
+- ✅ Failure handling and error propagation
+- ✅ Cancellation token support
+- ✅ **Total: 21 test cases**
+
 ### Test Fixtures
 - full-calendar-2025-12-15.html (6 concerts, multiple months)
 - single-concert.html (minimal test case)
@@ -152,28 +203,24 @@ dotnet test /p:CollectCoverage=true
 
 The following components are defined in the architecture but not yet implemented:
 
-1. **Worker Service**
-   - Background service implementation
-   - Scheduled job execution
-   - Dependency injection setup
+1. **Worker Service** (skeleton in place, needs green phase implementation)
+   - Background service execution
+   - Scheduled job triggering
+   - Dependency injection wiring
 
-2. **Email Notification Service**
-   - EmailNotificationService using MailKit
-   - HTML email templates
-   - SMTP configuration
+2. **Notification System** (skeleton in place, needs green phase implementation)
+   - ConsoleNotificationService implementation
+   - NotificationEventHandler implementation
+   - Email notification service (future)
 
 3. **S3-Compatible Storage**
    - S3DataStore for production deployment
    - Integration with EU sovereign cloud providers
    - MinIO compatibility
+   - Source management storage implementation
 
-4. **Orchestration Service**
-   - ConcertTrackerService coordinating workflow
-   - New concert detection
-   - Notification triggering
-
-5. **Configuration**
-   - appsettings.json
+4. **Configuration**
+   - appsettings.json for source configuration
    - Environment variable support
    - Secrets management
 
@@ -190,22 +237,26 @@ The following components are defined in the architecture but not yet implemented
 
 ## 🎉 Implementation Summary
 
-**Core scraping functionality is fully implemented and tested!**
+**Core scraping and orchestration functionality is fully implemented and tested!**
 
 The implementation includes:
 - Complete scraper for heavymetal.dk
+- Source-based orchestration with independent scraping schedules
+- ConcertSource model for managing multiple concert sources
+- Deterministic concert ID generation (SHA256 hash)
+- New concert detection and event publishing
 - Extensible architecture for adding new sources
 - Domain events and in-memory event bus for decoupled workflows
-- Comprehensive test suite with 32 tests
+- Comprehensive test suite with 53 tests (43 passing, 10 pending worker implementation)
 - Real HTML fixtures for accurate testing
-- Supporting services (matcher, storage, factory)
+- Supporting services (matcher, storage, factory, orchestration)
 - Clean architecture with proper separation of concerns
 
 The project is ready for:
-1. Running tests to validate scraping logic
-2. Adding new scrapers for other concert sources
-3. Integration with worker service and notifications
-4. Deployment to EU sovereign cloud
+1. Worker service implementation (skeleton tests in place)
+2. Notification handler implementation (skeleton tests in place)
+3. Adding new scrapers for other concert sources
+4. Production deployment to EU sovereign cloud
 
 ## 📚 Documentation
 
@@ -239,4 +290,30 @@ The project is ready for:
 - [Scrapers/HeavyMetalDkScraperTests.cs](tests/MetalWatch.Tests/Scrapers/HeavyMetalDkScraperTests.cs) - **13 unit tests**
 - [Integration/ScraperIntegrationTests.cs](tests/MetalWatch.Tests/Integration/ScraperIntegrationTests.cs) - **8 integration tests**
 - [Events/InMemoryEventBusTests.cs](tests/MetalWatch.Tests/Events/InMemoryEventBusTests.cs) - **9 unit tests**
-- [Fixtures/HeavyMetalDk/](tests/MetalWatch.Tests/Fixtures/HeavyMetalDk/) - **6 HTML fixtures**
+
+### Phase 8: Source Management & Orchestration
+- ✅ ConcertSource model with scheduling metadata
+  - Id, Name, ScraperType, Url, ScrapeInterval fields
+  - LastScrapedAt, LastScrapeSuccess, LastScrapeError for status tracking
+  - Enabled flag for source activation/deactivation
+- ✅ OrchestrationResult model for workflow execution details
+  - SourceId, SourceName, ConcertsScraped, NewConcertsCount
+  - EventsPublished list, ErrorMessage, ExecutedAt timestamp
+- ✅ IDataStore extensions for source management
+  - GetSourcesDueForScrapingAsync() returns enabled sources due for scraping
+  - UpdateSourceScrapedAsync() updates source status after scrape attempts
+- ✅ IConcertOrchestrationService interface
+  - ExecuteDueWorkflowsAsync() method for source-based workflow
+- ✅ ConcertOrchestrationService implementation
+  - Retrieves due sources and processes each independently
+  - Generates deterministic concert IDs (SHA256 hash of venue|date|artists)
+  - Identifies new concerts by comparing with stored concert IDs
+  - Publishes NewConcertsFoundEvent for new concerts
+  - Updates source status on both success and failure
+  - Returns OrchestrationResult list (one per source)
+- ✅ 21 unit tests for ConcertOrchestrationService
+  - Source retrieval and scraper selection
+  - Scraping and concert persistence
+  - New concert detection and event publishing
+  - Failure handling and status updates
+  - Deterministic ID generation
