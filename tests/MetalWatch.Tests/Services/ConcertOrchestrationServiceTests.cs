@@ -525,10 +525,11 @@ public class ConcertOrchestrationServiceTests
 
         // Assert
         savedConcerts.Should().NotBeNull();
-        savedConcerts!.Should().HaveCount(2);
-        savedConcerts[0].Id.Should().NotBe("temp-id-1");
-        savedConcerts[1].Id.Should().NotBe("temp-id-2");
-        savedConcerts[0].Id.Should().NotBe(savedConcerts[1].Id);
+        var concerts = savedConcerts!;
+        concerts.Should().HaveCount(2);
+        concerts[0].Id.Should().NotBe("temp-id-1");
+        concerts[1].Id.Should().NotBe("temp-id-2");
+        concerts[0].Id.Should().NotBe(concerts[1].Id);
     }
 
     [Fact]
