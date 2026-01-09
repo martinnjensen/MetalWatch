@@ -25,7 +25,7 @@ public class InMemoryDataStore : IDataStore
                 Id = "heavymetal-dk",
                 Name = "HeavyMetal.dk",
                 ScraperType = "HeavyMetalDk",
-                Url = "https://heavymetal.dk/koncerter/",
+                Url = "https://heavymetal.dk/koncertkalender/",
                 Enabled = true,
                 ScrapeInterval = TimeSpan.FromHours(24)
             }

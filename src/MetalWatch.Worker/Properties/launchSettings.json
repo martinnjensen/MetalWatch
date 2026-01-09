@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "MetalWatch.Worker": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

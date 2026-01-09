@@ -5,6 +5,7 @@ using MetalWatch.Infrastructure.Events;
 using MetalWatch.Infrastructure.Notifications;
 using MetalWatch.Infrastructure.Scrapers;
 using MetalWatch.Infrastructure.Storage;
+using MetalWatch.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -21,10 +22,13 @@ builder.Services.AddLogging(logging =>
 // HttpClient for scrapers
 builder.Services.AddHttpClient();
 
+// Register individual scrapers
+builder.Services.AddSingleton<IConcertScraper, HeavyMetalDkScraper>();
+
 // Core services
 builder.Services.AddSingleton<IScraperFactory, ScraperFactory>();
 builder.Services.AddSingleton<IEventBus, InMemoryEventBus>();
-builder.Services.AddScoped<IConcertMatcher, ConcertMatcherService>();
+builder.Services.AddSingleton<IConcertMatcher, ConcertMatcherService>();
 builder.Services.AddScoped<IConcertOrchestrationService, ConcertOrchestrationService>();
 
 // Data store - environment-specific
@@ -54,6 +58,9 @@ else
 // Event handlers
 // NotificationEventHandler will auto-subscribe via constructor that takes IEventBus
 builder.Services.AddSingleton<NotificationEventHandler>();
+
+// Hosted service
+builder.Services.AddHostedService<ConcertScrapingHostedService>();
 
 var host = builder.Build();
 
