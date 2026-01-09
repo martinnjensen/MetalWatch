@@ -25,7 +25,47 @@ public class ConsoleNotificationService : INotificationService
         List<Concert> concerts,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implement console notification logic
-        throw new NotImplementedException();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var timestamp = DateTime.UtcNow;
+
+        if (concerts.Count == 0)
+        {
+            _logger.LogInformation("No concerts to notify about");
+            return Task.FromResult(new NotificationResult
+            {
+                Success = true,
+                Message = "No concerts to notify about",
+                ConcertsNotified = 0,
+                SentAt = timestamp
+            });
+        }
+
+        _logger.LogInformation("Notifying about {Count} matched concert(s)", concerts.Count);
+        Console.WriteLine($"\n=== {concerts.Count} Matched Concert(s) ===\n");
+
+        foreach (var concert in concerts)
+        {
+            var status = concert.IsCancelled ? "[CANCELLED] " : "";
+            var type = concert.IsFestival ? "Festival" : "Concert";
+            var artists = string.Join(", ", concert.Artists);
+
+            Console.WriteLine($"{status}{type}: {artists}");
+            Console.WriteLine($"  Date: {concert.Date:yyyy-MM-dd} ({concert.DayOfWeek})");
+            Console.WriteLine($"  Venue: {concert.Venue}");
+            Console.WriteLine($"  URL: {concert.ConcertUrl}");
+            Console.WriteLine();
+        }
+
+        var message = $"Successfully notified about {concerts.Count} concert(s)";
+        _logger.LogInformation("{Message}", message);
+
+        return Task.FromResult(new NotificationResult
+        {
+            Success = true,
+            Message = message,
+            ConcertsNotified = concerts.Count,
+            SentAt = timestamp
+        });
     }
 }
