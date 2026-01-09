@@ -46,6 +46,34 @@ public string Id { get; set; } = string.Empty;
 
 All external integrations use interfaces for testability and flexibility.
 
+### 5. Test-Driven Development (TDD)
+
+**All implementation work MUST follow TDD:**
+
+1. **Red Phase**: Write failing tests first
+   - Create test class with test methods that define expected behavior
+   - Create skeleton/stub implementation (interfaces, empty classes)
+   - Commit with message: "Add [feature] tests (red phase)"
+
+2. **Green Phase**: Implement logic to make tests pass
+   - Write minimal code to pass the tests
+   - Commit with message: "Implement [feature] logic (green phase)"
+
+3. **Refactor Phase** (optional): Clean up while keeping tests green
+   - Improve code quality without changing behavior
+   - Commit with message: "Refactor [feature]"
+
+**Example workflow:**
+```bash
+# Red phase - tests fail
+git commit -m "Add ConcertTrackerService tests (red phase)"
+
+# Green phase - tests pass
+git commit -m "Implement ConcertTrackerService logic (green phase)"
+```
+
+**Rationale**: TDD ensures testable design, documents expected behavior, and catches regressions early.
+
 ## Code Conventions
 
 ### XML Documentation
@@ -158,9 +186,11 @@ public async Task ScrapeAsync_WithCancelledConcert_SetsCancelledFlag()
 ❌ **Don't** commit secrets (credentials, API keys, tokens) to version control
 ❌ **Don't** push or merge code containing secrets to the git repository
 ❌ **Don't** create documentation files unless explicitly requested
+❌ **Don't** implement features without writing tests first (TDD red phase)
 
 ✅ **Do** use dependency injection for all services
-✅ **Do** write tests for new functionality
+✅ **Do** follow TDD: write failing tests before implementation
+✅ **Do** commit after each TDD phase (red, green, refactor)
 ✅ **Do** use structured logging with `ILogger<T>`
 ✅ **Do** use `CancellationToken` for async operations
 ✅ **Do** keep commits focused and atomic
@@ -180,13 +210,14 @@ dotnet test --filter "FullyQualifiedName~HeavyMetalDkScraperTests"
 dotnet test /p:CollectCoverage=true
 ```
 
-### Making Changes
+### Making Changes (TDD Workflow)
 
 1. Create feature branch from `master`
-2. Implement changes with tests
-3. Ensure all tests pass
-4. Commit with descriptive message
-5. Create pull request
+2. **Red phase**: Write failing tests + skeleton code, commit
+3. **Green phase**: Implement logic to make tests pass, commit
+4. **Refactor** (optional): Clean up code, commit
+5. Ensure all tests pass
+6. Create pull request
 
 ## Debugging Tips
 

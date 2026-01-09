@@ -46,14 +46,14 @@ MetalWatch follows Clean Architecture with three main layers:
 
 ## Data Flow
 
-### Event-Driven Architecture with Per-Source Orchestration
+### Event-Driven Architecture with Source-Based Orchestration
 
 ```
 Timer/Schedule (Phase 3+)
     ↓
 Worker Service
     ↓
-Calls orchestrator with source URL
+ConcertOrchestrationService.ExecuteDueWorkflowsAsync()
     ↓
 Orchestration Service (per source)
     ↓
@@ -192,6 +192,39 @@ public class ScraperResult
 }
 ```
 
+**ConcertSource** - Configuration for a concert source to be scraped
+
+```csharp
+public class ConcertSource
+{
+    public required string Id { get; set; }                // Unique identifier
+    public required string Name { get; set; }              // Human-readable name (e.g., "HeavyMetal.dk")
+    public required string ScraperType { get; set; }       // Scraper type for IScraperFactory
+    public required string Url { get; set; }               // URL to scrape
+    public TimeSpan ScrapeInterval { get; set; }           // How often to scrape
+    public DateTime? LastScrapedAt { get; set; }           // Last scrape timestamp
+    public bool? LastScrapeSuccess { get; set; }           // Last scrape result
+    public string? LastScrapeError { get; set; }           // Last error message
+    public bool Enabled { get; set; } = true;              // Whether source is active
+}
+```
+
+**OrchestrationResult** - Result of orchestration workflow for a single source
+
+```csharp
+public class OrchestrationResult
+{
+    public bool Success { get; set; }                      // Workflow success status
+    public required string SourceId { get; set; }          // Source ID processed
+    public required string SourceName { get; set; }        // Source name processed
+    public int ConcertsScraped { get; set; }               // Total concerts scraped
+    public int NewConcertsCount { get; set; }              // New concerts found
+    public List<string> EventsPublished { get; set; } = new(); // Events published
+    public string? ErrorMessage { get; set; }              // Error if failed
+    public DateTime ExecutedAt { get; set; }               // Execution timestamp
+}
+```
+
 #### Interfaces
 
 **IConcertScraper** - Web scraping abstraction
@@ -244,21 +277,47 @@ public interface IDataStore
     Task<List<Concert>> GetPreviousConcertsAsync();
     Task SaveConcertsAsync(List<Concert> concerts);
     Task<ConcertPreferences> GetPreferencesAsync();
+    Task SavePreferencesAsync(ConcertPreferences preferences);
+    Task<List<ConcertSource>> GetSourcesDueForScrapingAsync(CancellationToken cancellationToken = default);
+    Task UpdateSourceScrapedAsync(string sourceId, DateTime scrapedAt, bool success,
+                                   string? errorMessage = null, CancellationToken cancellationToken = default);
 }
 ```
 
 - Abstract storage layer
 - Supports different backends (JSON, S3-compatible, Database)
-- Handles concert history and preferences
+- Handles concert history, preferences, and source management
+- `GetSourcesDueForScrapingAsync` returns enabled sources where LastScrapedAt + ScrapeInterval < Now
+- `UpdateSourceScrapedAsync` updates source status to prevent excessive retries
 
 **IScraperFactory** - Creates appropriate scraper for source
 
 ```csharp
 public interface IScraperFactory
 {
-    IConcertScraper CreateScraper(string sourceUrl);
+    IConcertScraper GetScraper(string url);
+    IConcertScraper GetScraperByName(string name);
+    IEnumerable<IConcertScraper> GetAllScrapers();
 }
 ```
+
+- `GetScraper` - Auto-selects scraper based on URL pattern
+- `GetScraperByName` - Gets scraper by type name (e.g., "HeavyMetalDk")
+- `GetAllScrapers` - Returns all registered scrapers
+
+**IConcertOrchestrationService** - Orchestrates concert discovery workflow
+
+```csharp
+public interface IConcertOrchestrationService
+{
+    Task<List<OrchestrationResult>> ExecuteDueWorkflowsAsync(CancellationToken cancellationToken = default);
+}
+```
+
+- Retrieves sources due for scraping from data store
+- For each source: scrapes, identifies new concerts, saves, publishes events
+- Updates source status (success/failure) after each scrape attempt
+- Returns list of results (one per source processed)
 
 #### Services
 
@@ -277,6 +336,22 @@ public interface IScraperFactory
 | Keyword in artist name | +25 per keyword |
 
 Concerts with score > 0 are included in notifications, sorted by score descending.
+
+**ConcertOrchestrationService** - Coordinates the concert discovery workflow
+
+- Implements `IConcertOrchestrationService`
+- Entry point for concert scraping and new concert detection
+- Workflow for each due source:
+  1. Retrieves sources due for scraping from IDataStore
+  2. Gets appropriate scraper by ScraperType via IScraperFactory
+  3. Scrapes concerts from source URL
+  4. Generates deterministic concert IDs (SHA256 hash of venue|date|artists)
+  5. Loads previous concerts and identifies new ones by ID comparison
+  6. Saves all scraped concerts to storage
+  7. Publishes NewConcertsFoundEvent if new concerts found
+  8. Updates source status (LastScrapedAt, LastScrapeSuccess, LastScrapeError)
+- Returns OrchestrationResult for each source with execution details
+- Continues processing remaining sources even if one fails
 
 ### Infrastructure Layer (MetalWatch.Infrastructure)
 
